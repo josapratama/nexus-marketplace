@@ -1,0 +1,69 @@
+services:
+  # ─────────────────────────────────────────
+  # MySQL 8 Database
+  # ─────────────────────────────────────────
+  db:
+    image: mysql:8.0
+    container_name: nexus-db
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: root_password
+      MYSQL_DATABASE: nexus
+      MYSQL_USER: nexus
+      MYSQL_PASSWORD: nexus_pass
+    ports:
+      - "3306:3306"
+    volumes:
+      - nexus_db_data:/var/lib/mysql
+      - ./docker/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "mysqladmin",
+          "ping",
+          "-h",
+          "localhost",
+          "-u",
+          "nexus",
+          "-pnexus_pass",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  # ─────────────────────────────────────────
+  # App (dev mode — hot reload via tsx watch)
+  # ─────────────────────────────────────────
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: nexus-app
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: mysql://nexus:nexus_pass@db:3306/nexus
+      NODE_ENV: development
+      PORT: 3000
+      JWT_SECRET: ${JWT_SECRET:-dev_secret_change_in_production}
+      OAUTH_SERVER_URL: ${OAUTH_SERVER_URL:-}
+      OWNER_OPEN_ID: ${OWNER_OPEN_ID:-}
+      VITE_APP_ID: ${VITE_APP_ID:-}
+      # Ensure Vite binds to all interfaces inside the container
+      HOST: 0.0.0.0
+    ports:
+      # Express API + Vite middleware runs on one port (middlewareMode)
+      - "3000:3000"
+    volumes:
+      # Mount source for live reload — node_modules excluded
+      - .:/app
+      - /app/node_modules
+    command: pnpm dev
+
+volumes:
+  nexus_db_data:
+    driver: local

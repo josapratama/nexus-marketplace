@@ -1,0 +1,22 @@
+# ─────────────────────────────────────────
+# Development image — hot reload via tsx watch
+# ─────────────────────────────────────────
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Install pnpm
+RUN corepack enable && corepack prepare pnpm@10.4.1 --activate
+
+# Copy manifests for dependency caching
+COPY package.json pnpm-lock.yaml ./
+COPY patches/ ./patches/
+
+# Install all deps (dev included)
+RUN pnpm install --frozen-lockfile
+
+# Source is mounted as a volume at runtime — no COPY needed here
+
+EXPOSE 3000 5173
+
+CMD ["pnpm", "dev"]

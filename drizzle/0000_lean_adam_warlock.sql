@@ -1,0 +1,2 @@
+-- Migration 0000: initial schema (already applied)
+-- This file is a stub. The actual migration was applied before version control.

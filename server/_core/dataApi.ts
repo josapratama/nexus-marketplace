@@ -1,0 +1,74 @@
+/**
+ * Generic Data API proxy helper.
+ *
+ * Requires STORAGE_API_URL and STORAGE_API_KEY environment variables.
+ *
+ * Quick example:
+ *   await callDataApi("Youtube/search", {
+ *     query: { gl: "US", hl: "en", q: "typescript" },
+ *   })
+ */
+import { ENV } from "./env";
+
+export type DataApiCallOptions = {
+  query?: Record<string, unknown>;
+  body?: Record<string, unknown>;
+  pathParams?: Record<string, unknown>;
+  formData?: Record<string, unknown>;
+};
+
+export async function callDataApi(
+  apiId: string,
+  options: DataApiCallOptions = {}
+): Promise<unknown> {
+  if (!ENV.storageApiUrl) {
+    throw new Error("STORAGE_API_URL is not configured");
+  }
+  if (!ENV.storageApiKey) {
+    throw new Error("STORAGE_API_KEY is not configured");
+  }
+
+  const baseUrl = ENV.storageApiUrl.endsWith("/")
+    ? ENV.storageApiUrl
+    : `${ENV.storageApiUrl}/`;
+  const fullUrl = new URL(
+    "webdevtoken.v1.WebDevService/CallApi",
+    baseUrl
+  ).toString();
+
+  const response = await fetch(fullUrl, {
+    method: "POST",
+    headers: {
+      accept: "application/json",
+      "content-type": "application/json",
+      "connect-protocol-version": "1",
+      authorization: `Bearer ${ENV.storageApiKey}`,
+    },
+    body: JSON.stringify({
+      apiId,
+      query: options.query,
+      body: options.body,
+      path_params: options.pathParams,
+      multipart_form_data: options.formData,
+    }),
+  });
+
+  if (!response.ok) {
+    const detail = await response.text().catch(() => "");
+    throw new Error(
+      `Data API request failed (${response.status} ${response.statusText})${
+        detail ? `: ${detail}` : ""
+      }`
+    );
+  }
+
+  const payload = await response.json().catch(() => ({}));
+  if (payload && typeof payload === "object" && "jsonData" in payload) {
+    try {
+      return JSON.parse((payload as Record<string, string>).jsonData ?? "{}");
+    } catch {
+      return (payload as Record<string, unknown>).jsonData;
+    }
+  }
+  return payload;
+}
