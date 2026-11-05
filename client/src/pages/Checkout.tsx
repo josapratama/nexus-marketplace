@@ -258,10 +258,8 @@ export default function Checkout() {
 
         {/* Shipping + Payment forms side by side with order summary */}
         <div
+          className="checkout-layout-grid"
           style={{
-            display: "grid",
-            gridTemplateColumns: "1fr 350px",
-            gap: "2rem",
             maxWidth: "1000px",
             margin: "0 auto",
           }}
@@ -326,13 +324,7 @@ export default function Checkout() {
                       style={inputStyle}
                     />
                   </div>
-                  <div
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: "1fr 1fr",
-                      gap: "1rem",
-                    }}
-                  >
+                  <div className="two-col-grid">
                     <div>
                       <label style={labelStyle}>CITY</label>
                       <Input
@@ -435,13 +427,7 @@ export default function Checkout() {
                       style={inputStyle}
                     />
                   </div>
-                  <div
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: "1fr 1fr",
-                      gap: "1rem",
-                    }}
-                  >
+                  <div className="two-col-grid">
                     <div>
                       <label style={labelStyle}>EXPIRY DATE</label>
                       <Input

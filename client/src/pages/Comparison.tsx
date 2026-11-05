@@ -193,14 +193,16 @@ export default function Comparison() {
           style={{
             border: "2px solid #00f5ff",
             borderRadius: "4px",
-            overflow: "hidden",
+            overflowX: "auto",
+            WebkitOverflowScrolling: "touch",
             boxShadow: "0 0 30px rgba(0, 245, 255, 0.2)",
           }}
         >
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: `200px repeat(${selectedProducts.length}, 1fr)`,
+              gridTemplateColumns: `200px repeat(${selectedProducts.length}, minmax(180px, 1fr))`,
+              minWidth: "650px",
               gap: 0,
             }}
           >

@@ -193,13 +193,7 @@ export default function Cart() {
             </Button>
           </div>
         ) : (
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "1fr 350px",
-              gap: "2rem",
-            }}
-          >
+          <div className="cart-layout-grid">
             {/* Cart Items */}
             <div
               style={{ display: "flex", flexDirection: "column", gap: "1rem" }}

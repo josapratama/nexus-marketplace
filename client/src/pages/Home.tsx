@@ -79,14 +79,7 @@ export default function Home() {
         />
 
         <div className="container" style={{ position: "relative", zIndex: 10 }}>
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "1fr 1fr",
-              gap: "4rem",
-              alignItems: "center",
-            }}
-          >
+          <div className="hero-grid">
             {/* Left */}
             <div
               style={{ display: "flex", flexDirection: "column", gap: "2rem" }}
@@ -1057,14 +1050,7 @@ export default function Home() {
         }}
       >
         <div className="container">
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "2fr 1fr 1fr 1fr 1fr",
-              gap: "2rem",
-              marginBottom: "2.5rem",
-            }}
-          >
+          <div className="footer-grid">
             <div>
               <div
                 style={{

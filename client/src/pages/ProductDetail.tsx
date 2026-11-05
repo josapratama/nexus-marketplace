@@ -145,13 +145,7 @@ export default function ProductDetail() {
       <div style={{ minHeight: "100vh", backgroundColor: "#0a0e27" }}>
         <Navigation />
         <div className="container" style={{ paddingTop: "2rem" }}>
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "1fr 1fr",
-              gap: "3rem",
-            }}
-          >
+          <div className="product-detail-grid">
             <div
               style={{
                 aspectRatio: "1",
@@ -251,10 +245,8 @@ export default function ProductDetail() {
 
         {/* Main Content */}
         <div
+          className="product-detail-grid"
           style={{
-            display: "grid",
-            gridTemplateColumns: "1fr 1fr",
-            gap: "3rem",
             marginBottom: "3rem",
           }}
         >
@@ -698,10 +690,8 @@ export default function ProductDetail() {
           </h2>
 
           <div
+            className="two-col-grid"
             style={{
-              display: "grid",
-              gridTemplateColumns: "1fr 1fr",
-              gap: "2rem",
               marginBottom: "2rem",
             }}
           >

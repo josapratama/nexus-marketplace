@@ -289,4 +289,108 @@
   .clip-diagonal-inverse {
     clip-path: polygon(0 15%, 100% 0, 100% 100%, 0 100%);
   }
+
+  /* Responsive Layout Utilities */
+  .hero-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4rem;
+    align-items: center;
+  }
+
+  .footer-grid {
+    display: grid;
+    grid-template-columns: 2fr 1fr 1fr 1fr 1fr;
+    gap: 2rem;
+    margin-bottom: 2.5rem;
+  }
+
+  .cart-layout-grid,
+  .checkout-layout-grid {
+    display: grid;
+    grid-template-columns: 1fr 350px;
+    gap: 2rem;
+  }
+
+  .catalog-layout-grid {
+    display: grid;
+    grid-template-columns: 250px 1fr;
+    gap: 2rem;
+  }
+
+  .product-detail-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 3rem;
+  }
+
+  .two-col-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+  }
+
+  .three-col-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1.5rem;
+  }
+
+  .admin-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1.5rem;
+  }
+
+  @media (max-width: 1024px) {
+    .admin-stats-grid {
+      grid-template-columns: repeat(2, 1fr) !important;
+    }
+    .footer-grid {
+      grid-template-columns: 2fr 1fr 1fr !important;
+    }
+    .hero-grid {
+      gap: 2.5rem !important;
+    }
+  }
+
+  @media (max-width: 768px) {
+    .hero-grid {
+      grid-template-columns: 1fr !important;
+      gap: 2.5rem !important;
+    }
+    .footer-grid {
+      grid-template-columns: 1fr 1fr !important;
+      gap: 2rem !important;
+    }
+    .cart-layout-grid,
+    .checkout-layout-grid {
+      grid-template-columns: 1fr !important;
+    }
+    .catalog-layout-grid {
+      grid-template-columns: 1fr !important;
+    }
+    .product-detail-grid {
+      grid-template-columns: 1fr !important;
+      gap: 2rem !important;
+    }
+    .two-col-grid {
+      grid-template-columns: 1fr !important;
+      gap: 1rem !important;
+    }
+    .three-col-grid {
+      grid-template-columns: 1fr !important;
+      gap: 1rem !important;
+    }
+    .admin-stats-grid {
+      grid-template-columns: 1fr !important;
+    }
+  }
+
+  @media (max-width: 480px) {
+    .footer-grid {
+      grid-template-columns: 1fr !important;
+      gap: 1.5rem !important;
+    }
+  }
 }

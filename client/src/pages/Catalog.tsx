@@ -236,9 +236,10 @@ export default function Catalog() {
 
         {/* Main Content */}
         <div
+          className={showFilters ? "catalog-layout-grid" : ""}
           style={{
             display: "grid",
-            gridTemplateColumns: showFilters ? "250px 1fr" : "1fr",
+            gridTemplateColumns: showFilters ? undefined : "1fr",
             gap: "2rem",
           }}
         >

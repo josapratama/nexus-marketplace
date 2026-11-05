@@ -28,6 +28,10 @@ FROM node:20-alpine AS runner
 
 WORKDIR /app
 
+ENV NODE_ENV=production
+ENV PORT=3000
+ENV HOST=0.0.0.0
+
 RUN corepack enable && corepack prepare pnpm@10.4.1 --activate
 
 # Copy manifests

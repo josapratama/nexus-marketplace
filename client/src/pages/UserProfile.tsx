@@ -171,10 +171,8 @@ export default function UserProfile() {
       >
         {/* Profile Header */}
         <div
+          className="two-col-grid"
           style={{
-            display: "grid",
-            gridTemplateColumns: "1fr 1fr",
-            gap: "2rem",
             marginBottom: "3rem",
           }}
         >
@@ -222,13 +220,7 @@ export default function UserProfile() {
             marginBottom: "2rem",
           }}
         >
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(3, 1fr)",
-              gap: "2rem",
-            }}
-          >
+          <div className="three-col-grid">
             <div>
               <p
                 style={{

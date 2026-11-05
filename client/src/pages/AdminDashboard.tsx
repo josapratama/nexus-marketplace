@@ -347,10 +347,8 @@ export default function AdminDashboard() {
 
         {/* Stats */}
         <div
+          className="admin-stats-grid"
           style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(4, 1fr)",
-            gap: "1.5rem",
             marginBottom: "2.5rem",
           }}
         >
