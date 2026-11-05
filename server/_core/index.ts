@@ -1,5 +1,7 @@
 import "dotenv/config";
 import express from "express";
+import fs from "fs";
+import path from "path";
 import { createServer } from "http";
 import net from "net";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
@@ -44,8 +46,13 @@ async function startServer() {
       createContext,
     })
   );
-  // development mode uses Vite, production mode uses static files
-  if (process.env.NODE_ENV === "development") {
+  // Only use Vite dev server if running from source (client/src exists) in development mode
+  // When running compiled bundle (node dist/index.js), always serve pre-built static files
+  const isDevSource =
+    process.env.NODE_ENV === "development" &&
+    fs.existsSync(path.resolve(import.meta.dirname, "../..", "client", "src"));
+
+  if (isDevSource) {
     const viteModulePath = "./vite";
     const { setupVite } = await import(viteModulePath);
     await setupVite(app, server);
