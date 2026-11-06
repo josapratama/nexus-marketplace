@@ -7,7 +7,11 @@ import {
   protectedProcedure,
   adminProcedure,
 } from "./_core/trpc";
+import { TRPCError } from "@trpc/server";
 import { z } from "zod";
+import fs from "fs";
+import path from "path";
+import { storagePut } from "./storage";
 import {
   getProducts,
   getProductById,
@@ -31,7 +35,19 @@ import {
   getAllOrders,
   updateOrderStatus,
   getProductSpecifications,
+  hasUserPurchasedProduct,
+  getDownloadAsset,
 } from "./db";
+
+const VALID_COUPONS: Record<
+  string,
+  { type: "percent" | "fixed"; value: number; label: string }
+> = {
+  NEXUS10: { type: "percent", value: 0.1, label: "10% Cyber Discount" },
+  CYBER20: { type: "percent", value: 0.2, label: "20% Flash Sale" },
+  SUPER50: { type: "fixed", value: 50, label: "$50 Community Voucher" },
+  FREEASSET: { type: "percent", value: 1.0, label: "100% Free VIP Voucher" },
+};
 
 export const appRouter = router({
   system: systemRouter,
@@ -117,6 +133,28 @@ export const appRouter = router({
     removeItem: protectedProcedure
       .input(z.number())
       .mutation(({ input }) => removeFromCart(input)),
+    validateCoupon: publicProcedure
+      .input(z.object({ code: z.string(), subtotal: z.number() }))
+      .mutation(({ input }) => {
+        const code = input.code.trim().toUpperCase();
+        const coupon = VALID_COUPONS[code];
+        if (!coupon) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "Invalid promo code. Try NEXUS10, CYBER20, or SUPER50",
+          });
+        }
+        const discountAmount =
+          coupon.type === "percent"
+            ? input.subtotal * coupon.value
+            : Math.min(input.subtotal, coupon.value);
+        return {
+          valid: true,
+          code,
+          discountAmount: Number(discountAmount.toFixed(2)),
+          label: coupon.label,
+        };
+      }),
   }),
 
   // Order routes
@@ -124,9 +162,35 @@ export const appRouter = router({
     getUserOrders: protectedProcedure.query(({ ctx }) =>
       getUserOrders(ctx.user.id)
     ),
-    createOrder: protectedProcedure.mutation(({ ctx }) =>
-      createOrder(ctx.user.id)
-    ),
+    createOrder: protectedProcedure
+      .input(
+        z
+          .object({
+            customerName: z.string().optional(),
+            customerEmail: z.string().optional(),
+            shippingAddress: z.string().optional(),
+            paymentMethod: z.string().optional(),
+            couponCode: z.string().optional(),
+            discountAmount: z.number().optional(),
+          })
+          .optional()
+      )
+      .mutation(({ ctx, input }) => createOrder(ctx.user.id, input)),
+    getDownloadAsset: protectedProcedure
+      .input(
+        z.object({
+          orderNumber: z.string(),
+          productId: z.number(),
+        })
+      )
+      .query(({ ctx, input }) =>
+        getDownloadAsset(
+          ctx.user.id,
+          ctx.user.role,
+          input.orderNumber,
+          input.productId
+        )
+      ),
   }),
 
   // Review routes
@@ -142,11 +206,20 @@ export const appRouter = router({
       .query(({ input }) =>
         getProductReviews(input.productId, input.limit, input.offset)
       ),
+    checkPurchase: protectedProcedure
+      .input(z.object({ productId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const res = await hasUserPurchasedProduct(ctx.user.id, input.productId);
+        return {
+          purchased: res.purchased || ctx.user.role === "admin",
+          orderId: res.orderId,
+        };
+      }),
     create: protectedProcedure
       .input(
         z.object({
           productId: z.number(),
-          orderId: z.number(),
+          orderId: z.number().default(0),
           rating: z.number().min(1).max(5),
           title: z.string().optional(),
           comment: z.string().optional(),
@@ -175,6 +248,65 @@ export const appRouter = router({
 
   // Admin routes — require admin role
   admin: router({
+    uploadFile: adminProcedure
+      .input(
+        z.object({
+          fileName: z.string(),
+          fileBase64: z.string(),
+          mimeType: z.string().optional(),
+        })
+      )
+      .mutation(async ({ input }) => {
+        // If S3 storage is available, use storagePut
+        if (process.env.STORAGE_API_URL && process.env.STORAGE_API_KEY) {
+          const buffer = Buffer.from(
+            input.fileBase64.replace(/^data:[^;]+;base64,/, ""),
+            "base64"
+          );
+          const res = await storagePut(
+            input.fileName,
+            buffer,
+            input.mimeType || "application/octet-stream"
+          );
+          return { url: res.url, key: res.key };
+        }
+
+        // Fallback: save to public/uploads
+        const ext = path.extname(input.fileName) || ".png";
+        const baseName = path
+          .basename(input.fileName, ext)
+          .replace(/[^a-zA-Z0-9_-]/g, "_");
+        const uniqueName = `${baseName}_${Date.now()}${ext}`;
+        const buffer = Buffer.from(
+          input.fileBase64.replace(/^data:[^;]+;base64,/, ""),
+          "base64"
+        );
+
+        const uploadsDir = path.resolve(
+          process.cwd(),
+          "dist",
+          "public",
+          "uploads"
+        );
+        const clientUploadsDir = path.resolve(
+          process.cwd(),
+          "client",
+          "public",
+          "uploads"
+        );
+
+        for (const dir of [uploadsDir, clientUploadsDir]) {
+          try {
+            if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+            fs.writeFileSync(path.join(dir, uniqueName), buffer);
+          } catch (e) {
+            // ignore
+          }
+        }
+
+        return { url: `/uploads/${uniqueName}`, key: uniqueName };
+      }),
+
     createProduct: adminProcedure
       .input(
         z.object({
@@ -184,6 +316,9 @@ export const appRouter = router({
           categoryId: z.number(),
           stock: z.number().min(0).default(0),
           imageUrl: z.string().optional(),
+          fileUrl: z.string().optional(),
+          fileSize: z.string().optional(),
+          demoUrl: z.string().optional(),
           tags: z.string().optional(),
         })
       )
@@ -208,6 +343,9 @@ export const appRouter = router({
           categoryId: z.number().optional(),
           stock: z.number().optional(),
           imageUrl: z.string().optional(),
+          fileUrl: z.string().optional(),
+          fileSize: z.string().optional(),
+          demoUrl: z.string().optional(),
           tags: z.string().optional(),
         })
       )

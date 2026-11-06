@@ -36,6 +36,27 @@ async function startServer() {
   // Configure body parser with larger size limit for file uploads
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
+
+  // Ensure and serve static uploads directory
+  const uploadsDir = path.resolve(process.cwd(), "dist", "public", "uploads");
+  const clientUploadsDir = path.resolve(
+    process.cwd(),
+    "client",
+    "public",
+    "uploads"
+  );
+  for (const dir of [uploadsDir, clientUploadsDir]) {
+    if (!fs.existsSync(dir)) {
+      try {
+        fs.mkdirSync(dir, { recursive: true });
+      } catch (e) {
+        // ignore
+      }
+    }
+  }
+  app.use("/uploads", express.static(uploadsDir));
+  app.use("/uploads", express.static(clientUploadsDir));
+
   registerStorageProxy(app);
   registerAuthRoutes(app);
   // tRPC API

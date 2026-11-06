@@ -61,6 +61,9 @@ async function ensureTablesExist(db: ReturnType<typeof drizzle>) {
         \`imageUrls\` text,
         \`tags\` text,
         \`stock\` int NOT NULL DEFAULT 0,
+        \`fileUrl\` text,
+        \`fileSize\` varchar(64),
+        \`demoUrl\` text,
         \`rating\` decimal(3,2) DEFAULT '0',
         \`reviewCount\` int NOT NULL DEFAULT 0,
         \`createdAt\` timestamp NOT NULL DEFAULT (now()),
@@ -89,6 +92,12 @@ async function ensureTablesExist(db: ReturnType<typeof drizzle>) {
         \`subtotal\` decimal(10,2) NOT NULL,
         \`tax\` decimal(10,2) DEFAULT '0',
         \`shipping\` decimal(10,2) DEFAULT '0',
+        \`discountAmount\` decimal(10,2) DEFAULT '0',
+        \`couponCode\` varchar(64),
+        \`customerName\` varchar(255),
+        \`customerEmail\` varchar(320),
+        \`shippingAddress\` text,
+        \`paymentMethod\` varchar(64),
         \`total\` decimal(10,2) NOT NULL,
         \`items\` text,
         \`createdAt\` timestamp NOT NULL DEFAULT (now()),
@@ -132,6 +141,24 @@ async function ensureTablesExist(db: ReturnType<typeof drizzle>) {
         CONSTRAINT \`productSpecifications_id\` PRIMARY KEY(\`id\`)
       )
     `);
+
+    // Safe column additions for existing MySQL databases
+    const safeAlter = async (query: string) => {
+      try {
+        await db.execute(sql.raw(query));
+      } catch (err) {
+        // Silently ignore duplicate column error
+      }
+    };
+    await safeAlter("ALTER TABLE `products` ADD COLUMN `fileUrl` text");
+    await safeAlter("ALTER TABLE `products` ADD COLUMN `fileSize` varchar(64)");
+    await safeAlter("ALTER TABLE `products` ADD COLUMN `demoUrl` text");
+    await safeAlter("ALTER TABLE `orders` ADD COLUMN `customerName` varchar(255)");
+    await safeAlter("ALTER TABLE `orders` ADD COLUMN `customerEmail` varchar(320)");
+    await safeAlter("ALTER TABLE `orders` ADD COLUMN `shippingAddress` text");
+    await safeAlter("ALTER TABLE `orders` ADD COLUMN `paymentMethod` varchar(64)");
+    await safeAlter("ALTER TABLE `orders` ADD COLUMN `discountAmount` decimal(10,2) DEFAULT '0'");
+    await safeAlter("ALTER TABLE `orders` ADD COLUMN `couponCode` varchar(64)");
   } catch (e) {
     console.warn("[Database] Schema check notice:", e);
   }
@@ -416,8 +443,17 @@ export async function removeFromWishlist(userId: number, productId: number) {
     .where(and(eq(wishlist.userId, userId), eq(wishlist.productId, productId)));
 }
 
-// Create order from cart items
-export async function createOrder(userId: number) {
+// Create order from cart items with stock validation, coupon discounts, and customer billing info
+export type CreateOrderOptions = {
+  customerName?: string;
+  customerEmail?: string;
+  shippingAddress?: string;
+  paymentMethod?: string;
+  couponCode?: string;
+  discountAmount?: number;
+};
+
+export async function createOrder(userId: number, options?: CreateOrderOptions) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
 
@@ -429,6 +465,9 @@ export async function createOrder(userId: number) {
       quantity: cartItems.quantity,
       productName: products.name,
       productPrice: products.price,
+      productStock: products.stock,
+      productFileUrl: products.fileUrl,
+      productSlug: products.slug,
     })
     .from(cartItems)
     .innerJoin(products, eq(cartItems.productId, products.id))
@@ -438,13 +477,35 @@ export async function createOrder(userId: number) {
     throw new Error("Cart is empty");
   }
 
+  // 1. Stock verification
+  for (const item of userCartItems) {
+    if (item.productStock < item.quantity) {
+      throw new Error(
+        `Insufficient stock for "${item.productName}". Available: ${item.productStock}, Requested: ${item.quantity}`
+      );
+    }
+  }
+
+  // 2. Decrement product stock
+  for (const item of userCartItems) {
+    await db
+      .update(products)
+      .set({ stock: sql`GREATEST(0, ${products.stock} - ${item.quantity})` })
+      .where(eq(products.id, item.productId));
+  }
+
   const subtotal = userCartItems.reduce(
-    (sum: number, item: { productPrice: string; quantity: number }) =>
-      sum + parseFloat(item.productPrice) * item.quantity,
+    (sum: number, item) => sum + parseFloat(item.productPrice) * item.quantity,
     0
   );
-  const tax = subtotal * 0.1;
-  const total = subtotal + tax;
+
+  const discountAmount = Math.min(
+    subtotal,
+    Math.max(0, options?.discountAmount || 0)
+  );
+  const discountedSubtotal = Math.max(0, subtotal - discountAmount);
+  const tax = discountedSubtotal * 0.1;
+  const total = discountedSubtotal + tax;
 
   const orderNumber = `ORD-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
 
@@ -453,6 +514,8 @@ export async function createOrder(userId: number) {
     productName: item.productName,
     quantity: item.quantity,
     price: item.productPrice,
+    slug: item.productSlug,
+    fileUrl: item.productFileUrl || null,
   }));
 
   await db.insert(orders).values({
@@ -460,9 +523,15 @@ export async function createOrder(userId: number) {
     orderNumber,
     status: "confirmed",
     subtotal: subtotal.toFixed(2),
+    discountAmount: discountAmount.toFixed(2),
+    couponCode: options?.couponCode || null,
     tax: tax.toFixed(2),
     shipping: "0",
     total: total.toFixed(2),
+    customerName: options?.customerName || null,
+    customerEmail: options?.customerEmail || null,
+    shippingAddress: options?.shippingAddress || null,
+    paymentMethod: options?.paymentMethod || "Credit Card (Simulated)",
     items: JSON.stringify(orderItems),
   });
 
@@ -494,6 +563,8 @@ export async function getCartItemsWithProducts(userId: number) {
       productPrice: products.price,
       productImageUrl: products.imageUrl,
       productSlug: products.slug,
+      productStock: products.stock,
+      productFileUrl: products.fileUrl,
       productCategory: categories.name,
     })
     .from(cartItems)
@@ -540,7 +611,89 @@ export async function getUserWishlistWithProducts(userId: number) {
     .where(eq(wishlist.userId, userId));
 }
 
-// Create a review
+// Check if a user has purchased a product
+export async function hasUserPurchasedProduct(
+  userId: number,
+  productId: number
+): Promise<{ purchased: boolean; orderId: number }> {
+  const db = await getDb();
+  if (!db) return { purchased: false, orderId: 0 };
+
+  const userOrders = await db
+    .select()
+    .from(orders)
+    .where(and(eq(orders.userId, userId), sql`${orders.status} != 'cancelled'`));
+
+  for (const ord of userOrders) {
+    try {
+      const items = JSON.parse(ord.items || "[]");
+      if (items.some((it: any) => it.productId === productId)) {
+        return { purchased: true, orderId: ord.id };
+      }
+    } catch {
+      // ignore JSON parse error
+    }
+  }
+
+  return { purchased: false, orderId: 0 };
+}
+
+// Download digital asset with ownership verification
+export async function getDownloadAsset(
+  userId: number,
+  userRole: string | undefined,
+  orderNumber: string,
+  productId: number
+) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const orderList = await db
+    .select()
+    .from(orders)
+    .where(eq(orders.orderNumber, orderNumber))
+    .limit(1);
+
+  if (orderList.length === 0) {
+    throw new Error("Order not found");
+  }
+
+  const order = orderList[0];
+  if (order.userId !== userId && userRole !== "admin") {
+    throw new Error("Unauthorized: This order does not belong to your account.");
+  }
+
+  if (order.status === "cancelled") {
+    throw new Error("Cannot download assets for a cancelled order.");
+  }
+
+  const items = JSON.parse(order.items || "[]");
+  const item = items.find((it: any) => it.productId === productId);
+  if (!item) {
+    throw new Error("Product was not found in this order.");
+  }
+
+  const productList = await db
+    .select()
+    .from(products)
+    .where(eq(products.id, productId))
+    .limit(1);
+
+  const product = productList[0];
+  const fileUrl = product?.fileUrl || item.fileUrl;
+
+  return {
+    success: true,
+    productName: product?.name || item.productName,
+    fileName: `${(product?.slug || "nexus-asset")}.zip`,
+    fileUrl: fileUrl || null,
+    fileSize: product?.fileSize || "48.5 MB",
+    licenseKey: `NX-LIC-${order.orderNumber.replace(/[^A-Z0-9]/gi, "").slice(-8)}-${productId}`,
+    purchasedAt: order.createdAt,
+  };
+}
+
+// Create a review with purchase verification
 export async function createReview(data: {
   productId: number;
   userId: number;
@@ -552,7 +705,28 @@ export async function createReview(data: {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
 
-  await db.insert(reviews).values(data);
+  // Verify ownership
+  const purchase = await hasUserPurchasedProduct(data.userId, data.productId);
+  const userList = await db
+    .select()
+    .from(users)
+    .where(eq(users.id, data.userId))
+    .limit(1);
+  const user = userList[0];
+
+  if (!purchase.purchased && user?.role !== "admin") {
+    throw new Error(
+      "Verified Purchase Required: You must purchase this digital asset before writing a review."
+    );
+  }
+
+  const resolvedOrderId =
+    data.orderId > 0 ? data.orderId : purchase.orderId || 1;
+
+  await db.insert(reviews).values({
+    ...data,
+    orderId: resolvedOrderId,
+  });
 
   // Update product rating
   const allReviews = await db
@@ -615,6 +789,9 @@ export async function createProduct(data: {
   categoryId: number;
   stock: number;
   imageUrl?: string;
+  fileUrl?: string;
+  fileSize?: string;
+  demoUrl?: string;
   tags?: string;
 }) {
   const db = await getDb();
@@ -639,6 +816,9 @@ export async function updateProduct(
     categoryId: number;
     stock: number;
     imageUrl: string;
+    fileUrl: string;
+    fileSize: string;
+    demoUrl: string;
     tags: string;
   }>
 ) {

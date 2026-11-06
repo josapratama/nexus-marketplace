@@ -62,6 +62,9 @@ export const products = mysqlTable("products", {
   imageUrls: text("imageUrls"), // JSON array of image URLs
   tags: text("tags"), // JSON array of tags
   stock: int("stock").default(0).notNull(),
+  fileUrl: text("fileUrl"), // Downloadable asset file URL or relative path
+  fileSize: varchar("fileSize", { length: 64 }), // e.g. "45.2 MB"
+  demoUrl: text("demoUrl"), // Live demo / preview link
   rating: decimal("rating", { precision: 3, scale: 2 }).default("0"),
   reviewCount: int("reviewCount").default(0).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
@@ -102,6 +105,12 @@ export const orders = mysqlTable("orders", {
   tax: decimal("tax", { precision: 10, scale: 2 }).default("0"),
   shipping: decimal("shipping", { precision: 10, scale: 2 }).default("0"),
   total: decimal("total", { precision: 10, scale: 2 }).notNull(),
+  discountAmount: decimal("discountAmount", { precision: 10, scale: 2 }).default("0"),
+  couponCode: varchar("couponCode", { length: 64 }),
+  customerName: varchar("customerName", { length: 255 }),
+  customerEmail: varchar("customerEmail", { length: 320 }),
+  shippingAddress: text("shippingAddress"),
+  paymentMethod: varchar("paymentMethod", { length: 64 }),
   items: text("items"), // JSON array of order items
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),

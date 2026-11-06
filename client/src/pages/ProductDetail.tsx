@@ -10,6 +10,9 @@ import {
   ChevronRight,
   Star,
   Scale,
+  BadgeCheck,
+  ExternalLink,
+  FileCode,
 } from "lucide-react";
 import { useComparison } from "@/contexts/ComparisonContext";
 import { trpc } from "@/lib/trpc";
@@ -41,6 +44,11 @@ export default function ProductDetail() {
   } = trpc.products.getById.useQuery(productId, {
     enabled: productId > 0,
   });
+
+  const { data: purchaseStatus } = trpc.reviews.checkPurchase.useQuery(
+    { productId },
+    { enabled: isAuthenticated && productId > 0 }
+  );
 
   const { data: reviews = [], isLoading: reviewsLoading } =
     trpc.reviews.getByProduct.useQuery(
@@ -482,6 +490,64 @@ export default function ProductDetail() {
               </div>
             )}
 
+            {/* Digital Asset Info & Demo Link */}
+            <div
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                gap: "0.75rem",
+                alignItems: "center",
+                padding: "0.75rem 1rem",
+                backgroundColor: "#1a1f3a",
+                border: "1px solid #2a2f4a",
+                borderRadius: "0.35rem",
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "0.4rem",
+                  color: "rgba(0, 245, 255, 0.8)",
+                  fontSize: "0.85rem",
+                }}
+              >
+                <FileCode size={16} style={{ color: "#00f5ff" }} />
+                <span>
+                  Format: <strong>Digital Download (.ZIP)</strong>
+                </span>
+              </div>
+              {product.fileSize && (
+                <div
+                  style={{
+                    color: "rgba(0, 245, 255, 0.8)",
+                    fontSize: "0.85rem",
+                  }}
+                >
+                  • Size: <strong>{product.fileSize}</strong>
+                </div>
+              )}
+              {product.demoUrl && (
+                <a
+                  href={product.demoUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{
+                    marginLeft: "auto",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "0.35rem",
+                    color: "#ff006e",
+                    fontSize: "0.85rem",
+                    fontWeight: 700,
+                    textDecoration: "none",
+                  }}
+                >
+                  Live Preview <ExternalLink size={14} />
+                </a>
+              )}
+            </div>
+
             {/* Tags */}
             {tags.length > 0 && (
               <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
@@ -790,13 +856,44 @@ export default function ProductDetail() {
                     Login to Review
                   </Button>
                 </div>
+              ) : !purchaseStatus?.purchased ? (
+                <div style={{ textAlign: "center", padding: "0.5rem 0" }}>
+                  <BadgeCheck
+                    size={36}
+                    style={{ color: "#00f5ff", margin: "0 auto 0.5rem" }}
+                  />
+                  <h3
+                    style={{
+                      fontWeight: 700,
+                      color: "#00f5ff",
+                      marginBottom: "0.4rem",
+                    }}
+                  >
+                    Verified Buyers Only
+                  </h3>
+                  <p
+                    style={{
+                      fontSize: "0.85rem",
+                      color: "rgba(0, 245, 255, 0.65)",
+                      marginBottom: "1rem",
+                      maxWidth: "380px",
+                      margin: "0 auto 1rem",
+                      lineHeight: 1.5,
+                    }}
+                  >
+                    To ensure real and authentic feedback, reviews can only be submitted by verified purchasers of this digital asset.
+                  </p>
+                  <Button onClick={handleAddToCart} className="btn-neon">
+                    Purchase Asset to Leave Review
+                  </Button>
+                </div>
               ) : showReviewForm ? (
                 <form
                   onSubmit={e => {
                     e.preventDefault();
                     createReviewMutation.mutate({
                       productId,
-                      orderId: 0,
+                      orderId: purchaseStatus?.orderId || 0,
                       rating: reviewForm.rating,
                       title: reviewForm.title || undefined,
                       comment: reviewForm.comment || undefined,
@@ -808,15 +905,34 @@ export default function ProductDetail() {
                     gap: "0.75rem",
                   }}
                 >
-                  <h3
+                  <div
                     style={{
-                      fontWeight: 700,
-                      color: "#00f5ff",
-                      marginBottom: "0.25rem",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
                     }}
                   >
-                    Write a Review
-                  </h3>
+                    <h3
+                      style={{
+                        fontWeight: 700,
+                        color: "#00f5ff",
+                      }}
+                    >
+                      Write a Review
+                    </h3>
+                    <span
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "0.25rem",
+                        color: "#39ff14",
+                        fontSize: "0.75rem",
+                        fontWeight: 700,
+                      }}
+                    >
+                      <BadgeCheck size={14} /> Verified Buyer
+                    </span>
+                  </div>
                   <div>
                     <label
                       style={{
@@ -946,6 +1062,23 @@ export default function ProductDetail() {
                 </form>
               ) : (
                 <div style={{ textAlign: "center" }}>
+                  <div
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "0.35rem",
+                      color: "#39ff14",
+                      fontSize: "0.8rem",
+                      fontWeight: 700,
+                      marginBottom: "0.5rem",
+                      backgroundColor: "rgba(57, 255, 20, 0.1)",
+                      border: "1px solid rgba(57, 255, 20, 0.3)",
+                      padding: "0.2rem 0.6rem",
+                      borderRadius: "9999px",
+                    }}
+                  >
+                    <BadgeCheck size={14} /> You Own This Asset
+                  </div>
                   <h3
                     style={{
                       fontWeight: 700,
@@ -962,7 +1095,7 @@ export default function ProductDetail() {
                       marginBottom: "1rem",
                     }}
                   >
-                    Help others by sharing your review
+                    You have verified ownership of this asset. Help the community by sharing your feedback.
                   </p>
                   <Button
                     onClick={() => setShowReviewForm(true)}

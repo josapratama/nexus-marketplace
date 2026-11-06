@@ -1,9 +1,19 @@
 import Navigation from "@/components/Navigation";
 import { useLocation } from "wouter";
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Plus, Edit2, Trash2, X, RefreshCw, PackagePlus } from "lucide-react";
+import {
+  Plus,
+  Edit2,
+  Trash2,
+  X,
+  RefreshCw,
+  PackagePlus,
+  Upload,
+  FileCode,
+  CheckCircle,
+} from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { toast } from "sonner";
@@ -16,6 +26,9 @@ type FormData = {
   description: string;
   stock: string;
   imageUrl: string;
+  fileUrl: string;
+  fileSize: string;
+  demoUrl: string;
 };
 
 const emptyForm: FormData = {
@@ -25,6 +38,9 @@ const emptyForm: FormData = {
   description: "",
   stock: "0",
   imageUrl: "",
+  fileUrl: "",
+  fileSize: "",
+  demoUrl: "",
 };
 
 export default function AdminDashboard() {
@@ -103,6 +119,59 @@ export default function AdminDashboard() {
     onError: err => toast.error(err.message || "Failed to create category"),
   });
 
+  const imageInputRef = useRef<HTMLInputElement>(null);
+  const assetInputRef = useRef<HTMLInputElement>(null);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [isUploadingAsset, setIsUploadingAsset] = useState(false);
+
+  const uploadFileMutation = trpc.admin.uploadFile.useMutation();
+
+  const handleFileUpload = async (
+    file: File,
+    type: "image" | "asset"
+  ) => {
+    const reader = new FileReader();
+    if (type === "image") setIsUploadingImage(true);
+    else setIsUploadingAsset(true);
+
+    reader.onload = async () => {
+      try {
+        const base64 = reader.result as string;
+        const res = await uploadFileMutation.mutateAsync({
+          fileName: file.name,
+          fileBase64: base64,
+          mimeType: file.type,
+        });
+
+        if (type === "image") {
+          setFormData(prev => ({ ...prev, imageUrl: res.url }));
+          toast.success("Image uploaded successfully!");
+        } else {
+          const sizeStr = `${(file.size / (1024 * 1024)).toFixed(1)} MB`;
+          setFormData(prev => ({
+            ...prev,
+            fileUrl: res.url,
+            fileSize: sizeStr,
+          }));
+          toast.success(`Asset file uploaded (${sizeStr})!`);
+        }
+      } catch (err: any) {
+        toast.error(err.message || "Failed to upload file");
+      } finally {
+        if (type === "image") setIsUploadingImage(false);
+        else setIsUploadingAsset(false);
+      }
+    };
+
+    reader.onerror = () => {
+      toast.error("Failed to read file");
+      if (type === "image") setIsUploadingImage(false);
+      else setIsUploadingAsset(false);
+    };
+
+    reader.readAsDataURL(file);
+  };
+
   const handleInputChange = (
     e: React.ChangeEvent<
       HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
@@ -127,6 +196,9 @@ export default function AdminDashboard() {
         description: formData.description || undefined,
         stock: parseInt(formData.stock) || 0,
         imageUrl: formData.imageUrl || undefined,
+        fileUrl: formData.fileUrl || undefined,
+        fileSize: formData.fileSize || undefined,
+        demoUrl: formData.demoUrl || undefined,
       });
     } else {
       createMutation.mutate({
@@ -136,6 +208,9 @@ export default function AdminDashboard() {
         description: formData.description || undefined,
         stock: parseInt(formData.stock) || 0,
         imageUrl: formData.imageUrl || undefined,
+        fileUrl: formData.fileUrl || undefined,
+        fileSize: formData.fileSize || undefined,
+        demoUrl: formData.demoUrl || undefined,
       });
     }
   };
@@ -148,6 +223,9 @@ export default function AdminDashboard() {
       description: product.description ?? "",
       stock: String(product.stock),
       imageUrl: product.imageUrl ?? "",
+      fileUrl: (product as any).fileUrl ?? "",
+      fileSize: (product as any).fileSize ?? "",
+      demoUrl: (product as any).demoUrl ?? "",
     });
     setEditingId(product.id);
     setShowForm(true);
@@ -564,15 +642,142 @@ export default function AdminDashboard() {
                 </div>
 
                 <div>
-                  <label style={labelStyle}>IMAGE URL</label>
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      marginBottom: "0.5rem",
+                    }}
+                  >
+                    <label style={{ ...labelStyle, marginBottom: 0 }}>
+                      PRODUCT IMAGE
+                    </label>
+                    <input
+                      type="file"
+                      ref={imageInputRef}
+                      accept="image/*"
+                      style={{ display: "none" }}
+                      onChange={e => {
+                        const file = e.target.files?.[0];
+                        if (file) handleFileUpload(file, "image");
+                      }}
+                    />
+                    <Button
+                      type="button"
+                      onClick={() => imageInputRef.current?.click()}
+                      disabled={isUploadingImage}
+                      style={{
+                        padding: "0.25rem 0.6rem",
+                        height: "auto",
+                        fontSize: "0.75rem",
+                        backgroundColor: "transparent",
+                        border: "1px solid #00f5ff",
+                        color: "#00f5ff",
+                        cursor: "pointer",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "0.3rem",
+                      }}
+                    >
+                      <Upload size={12} />
+                      {isUploadingImage ? "Uploading..." : "Upload File"}
+                    </Button>
+                  </div>
                   <Input
-                    type="url"
+                    type="text"
                     name="imageUrl"
                     value={formData.imageUrl}
                     onChange={handleInputChange}
-                    placeholder="https://example.com/image.jpg"
+                    placeholder="https://example.com/image.jpg or /uploads/..."
                     style={inputStyle}
                   />
+                  {formData.imageUrl && (
+                    <div style={{ marginTop: "0.5rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                      <img
+                        src={formData.imageUrl}
+                        alt="Preview"
+                        style={{ width: "40px", height: "40px", objectFit: "cover", borderRadius: "4px", border: "1px solid #2a2f4a" }}
+                      />
+                      <span style={{ fontSize: "0.75rem", color: "#39ff14" }}>Image linked</span>
+                    </div>
+                  )}
+                </div>
+
+                <div>
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      marginBottom: "0.5rem",
+                    }}
+                  >
+                    <label style={{ ...labelStyle, marginBottom: 0 }}>
+                      DIGITAL ASSET FILE (.ZIP / ARCHIVE)
+                    </label>
+                    <input
+                      type="file"
+                      ref={assetInputRef}
+                      style={{ display: "none" }}
+                      onChange={e => {
+                        const file = e.target.files?.[0];
+                        if (file) handleFileUpload(file, "asset");
+                      }}
+                    />
+                    <Button
+                      type="button"
+                      onClick={() => assetInputRef.current?.click()}
+                      disabled={isUploadingAsset}
+                      style={{
+                        padding: "0.25rem 0.6rem",
+                        height: "auto",
+                        fontSize: "0.75rem",
+                        backgroundColor: "transparent",
+                        border: "1px solid #39ff14",
+                        color: "#39ff14",
+                        cursor: "pointer",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "0.3rem",
+                      }}
+                    >
+                      <Upload size={12} />
+                      {isUploadingAsset ? "Uploading..." : "Upload Asset File"}
+                    </Button>
+                  </div>
+                  <Input
+                    type="text"
+                    name="fileUrl"
+                    value={formData.fileUrl}
+                    onChange={handleInputChange}
+                    placeholder="URL to zip file, or click Upload Asset File"
+                    style={inputStyle}
+                  />
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem", marginTop: "0.5rem" }}>
+                    <div>
+                      <label style={{ ...labelStyle, fontSize: "0.75rem" }}>FILE SIZE</label>
+                      <Input
+                        type="text"
+                        name="fileSize"
+                        value={formData.fileSize}
+                        onChange={handleInputChange}
+                        placeholder="e.g. 45.2 MB"
+                        style={inputStyle}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ ...labelStyle, fontSize: "0.75rem" }}>LIVE DEMO URL</label>
+                      <Input
+                        type="url"
+                        name="demoUrl"
+                        value={formData.demoUrl}
+                        onChange={handleInputChange}
+                        placeholder="https://preview.domain.com"
+                        style={inputStyle}
+                      />
+                    </div>
+                  </div>
                 </div>
 
                 <div

@@ -8,11 +8,15 @@ import {
   ShoppingBag,
   Download,
   ShoppingCart,
+  Printer,
+  Sparkles,
 } from "lucide-react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { startLogin } from "@/const";
+import { printOrderInvoice } from "@/lib/invoice";
+import { downloadDigitalAsset } from "@/lib/downloadAsset";
 
 export default function UserProfile() {
   const [, navigate] = useLocation();
@@ -52,38 +56,7 @@ export default function UserProfile() {
   };
 
   const handleDownloadInvoice = (order: (typeof orders)[0]) => {
-    const items = (() => {
-      try {
-        return JSON.parse(order.items ?? "[]");
-      } catch {
-        return [];
-      }
-    })();
-    const lines = [
-      `NEXUS - Order Invoice`,
-      `========================`,
-      `Order #: ${order.orderNumber}`,
-      `Date: ${new Date(order.createdAt).toLocaleDateString()}`,
-      `Status: ${order.status}`,
-      ``,
-      `Items:`,
-      ...items.map(
-        (item: { productName: string; quantity: number; price: string }) =>
-          `  - ${item.productName} x${item.quantity}  $${(parseFloat(item.price) * item.quantity).toFixed(2)}`
-      ),
-      ``,
-      `Subtotal: $${parseFloat(order.subtotal).toFixed(2)}`,
-      `Tax: $${parseFloat(order.tax ?? "0").toFixed(2)}`,
-      `Total: $${parseFloat(order.total).toFixed(2)}`,
-    ].join("\n");
-
-    const blob = new Blob([lines], { type: "text/plain" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `invoice-${order.orderNumber}.txt`;
-    a.click();
-    URL.revokeObjectURL(url);
+    printOrderInvoice(order as any);
   };
 
   if (loading) {
@@ -514,12 +487,12 @@ export default function UserProfile() {
                             gap: "0.5rem",
                           }}
                         >
-                          <Download size={18} />
-                          Invoice
+                          <Printer size={16} />
+                          Print / PDF Invoice
                         </Button>
                       </div>
 
-                      {/* Order items preview */}
+                      {/* Order items and Digital Downloads */}
                       {items.length > 0 && (
                         <div
                           style={{
@@ -528,40 +501,100 @@ export default function UserProfile() {
                             borderTop: "1px solid #2a2f4a",
                           }}
                         >
-                          <p
-                            style={{
-                              fontSize: "0.75rem",
-                              color: "rgba(0, 245, 255, 0.4)",
-                              marginBottom: "0.5rem",
-                            }}
-                          >
-                            ITEMS
-                          </p>
                           <div
                             style={{
                               display: "flex",
-                              flexWrap: "wrap",
+                              alignItems: "center",
+                              gap: "0.4rem",
+                              marginBottom: "0.6rem",
+                            }}
+                          >
+                            <Sparkles size={14} style={{ color: "#39ff14" }} />
+                            <p
+                              style={{
+                                fontSize: "0.75rem",
+                                fontWeight: 700,
+                                color: "#39ff14",
+                                letterSpacing: "0.5px",
+                              }}
+                            >
+                              PURCHASED DIGITAL ASSETS
+                            </p>
+                          </div>
+                          <div
+                            style={{
+                              display: "flex",
+                              flexDirection: "column",
                               gap: "0.5rem",
                             }}
                           >
                             {items.map(
                               (
-                                item: { productName: string; quantity: number },
+                                item: {
+                                  productName: string;
+                                  quantity: number;
+                                  productId?: number;
+                                  fileUrl?: string;
+                                },
                                 idx: number
                               ) => (
-                                <span
+                                <div
                                   key={idx}
                                   style={{
-                                    padding: "0.25rem 0.5rem",
-                                    backgroundColor: "rgba(0, 245, 255, 0.1)",
-                                    border: "1px solid rgba(0, 245, 255, 0.2)",
+                                    display: "flex",
+                                    justifyContent: "space-between",
+                                    alignItems: "center",
+                                    padding: "0.5rem 0.75rem",
+                                    backgroundColor: "rgba(0, 245, 255, 0.05)",
+                                    border: "1px solid rgba(0, 245, 255, 0.15)",
                                     borderRadius: "0.35rem",
-                                    color: "rgba(0, 245, 255, 0.7)",
-                                    fontSize: "0.75rem",
                                   }}
                                 >
-                                  {item.productName} ×{item.quantity}
-                                </span>
+                                  <div>
+                                    <span
+                                      style={{
+                                        color: "#ffffff",
+                                        fontWeight: 600,
+                                        fontSize: "0.85rem",
+                                      }}
+                                    >
+                                      {item.productName}
+                                    </span>
+                                    <span
+                                      style={{
+                                        marginLeft: "0.5rem",
+                                        color: "rgba(0, 245, 255, 0.5)",
+                                        fontSize: "0.75rem",
+                                      }}
+                                    >
+                                      ×{item.quantity}
+                                    </span>
+                                  </div>
+                                  <Button
+                                    onClick={() =>
+                                      downloadDigitalAsset({
+                                        productName: item.productName,
+                                        orderNumber: order.orderNumber,
+                                        productId: item.productId || idx + 1,
+                                        fileUrl: item.fileUrl,
+                                      })
+                                    }
+                                    style={{
+                                      backgroundColor: "transparent",
+                                      border: "1px solid #39ff14",
+                                      color: "#39ff14",
+                                      padding: "0.25rem 0.6rem",
+                                      fontSize: "0.75rem",
+                                      display: "flex",
+                                      alignItems: "center",
+                                      gap: "0.35rem",
+                                      height: "auto",
+                                    }}
+                                  >
+                                    <Download size={13} />
+                                    Download Asset
+                                  </Button>
+                                </div>
                               )
                             )}
                           </div>

@@ -1,9 +1,19 @@
 import Navigation from "@/components/Navigation";
 import { useLocation, useParams } from "wouter";
 import { Button } from "@/components/ui/button";
-import { CheckCircle, ArrowRight, Download, ShoppingBag } from "lucide-react";
+import {
+  CheckCircle,
+  ArrowRight,
+  Download,
+  ShoppingBag,
+  FileCheck,
+  Printer,
+  Sparkles,
+} from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
+import { printOrderInvoice } from "@/lib/invoice";
+import { downloadDigitalAsset } from "@/lib/downloadAsset";
 
 export default function OrderConfirmation() {
   const [, navigate] = useLocation();
@@ -32,31 +42,7 @@ export default function OrderConfirmation() {
 
   const handleDownload = () => {
     if (!order) return;
-    const lines = [
-      `NEXUS — Order Invoice`,
-      `========================`,
-      `Order #: ${order.orderNumber}`,
-      `Date: ${new Date(order.createdAt).toLocaleDateString()}`,
-      `Status: ${order.status}`,
-      ``,
-      `Items:`,
-      ...items.map(
-        (item: { productName: string; quantity: number; price: string }) =>
-          `  - ${item.productName} x${item.quantity}  $${(parseFloat(item.price) * item.quantity).toFixed(2)}`
-      ),
-      ``,
-      `Subtotal: $${parseFloat(order.subtotal).toFixed(2)}`,
-      `Tax: $${parseFloat(order.tax ?? "0").toFixed(2)}`,
-      `Total: $${parseFloat(order.total).toFixed(2)}`,
-    ].join("\n");
-
-    const blob = new Blob([lines], { type: "text/plain" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `invoice-${order.orderNumber}.txt`;
-    a.click();
-    URL.revokeObjectURL(url);
+    printOrderInvoice(order);
   };
 
   if (isLoading) {
@@ -325,6 +311,19 @@ export default function OrderConfirmation() {
                     <span>Subtotal</span>
                     <span>${parseFloat(order.subtotal).toFixed(2)}</span>
                   </div>
+                  {order.discountAmount && parseFloat(order.discountAmount) > 0 && (
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        color: "#39ff14",
+                        fontSize: "0.875rem",
+                      }}
+                    >
+                      <span>Discount ({order.couponCode || "COUPON"})</span>
+                      <span>-${parseFloat(order.discountAmount).toFixed(2)}</span>
+                    </div>
+                  )}
                   <div
                     style={{
                       display: "flex",
@@ -333,7 +332,7 @@ export default function OrderConfirmation() {
                       fontSize: "0.875rem",
                     }}
                   >
-                    <span>Tax</span>
+                    <span>Tax (10%)</span>
                     <span>${parseFloat(order.tax ?? "0").toFixed(2)}</span>
                   </div>
                   <div
@@ -357,6 +356,96 @@ export default function OrderConfirmation() {
             )}
           </div>
 
+          {/* Digital Downloads Section */}
+          {items.length > 0 && (
+            <div
+              style={{
+                backgroundColor: "#1a1f3a",
+                border: "1px solid #39ff14",
+                borderRadius: "0.35rem",
+                padding: "1.5rem",
+                marginBottom: "1.5rem",
+                boxShadow: "0 0 15px rgba(57, 255, 20, 0.15)",
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "0.5rem",
+                  marginBottom: "1rem",
+                }}
+              >
+                <Sparkles size={20} style={{ color: "#39ff14" }} />
+                <h3
+                  style={{
+                    fontSize: "1.125rem",
+                    fontWeight: 700,
+                    color: "#39ff14",
+                    letterSpacing: "0.5px",
+                  }}
+                >
+                  DIGITAL ASSET DOWNLOADS
+                </h3>
+              </div>
+              <p
+                style={{
+                  fontSize: "0.875rem",
+                  color: "rgba(0, 245, 255, 0.7)",
+                  marginBottom: "1rem",
+                }}
+              >
+                Your purchases include perpetual commercial licenses and direct file access. Click below to download your packages.
+              </p>
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+                {items.map((item: any, idx: number) => (
+                  <div
+                    key={idx}
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      backgroundColor: "#0a0e27",
+                      border: "1px solid #2a2f4a",
+                      borderRadius: "0.35rem",
+                      padding: "0.875rem 1rem",
+                    }}
+                  >
+                    <div>
+                      <p style={{ fontWeight: 600, color: "#ffffff", fontSize: "0.95rem" }}>
+                        {item.productName}
+                      </p>
+                      <p style={{ fontSize: "0.75rem", color: "rgba(0, 245, 255, 0.5)", marginTop: "2px" }}>
+                        License: NX-LIC-{order.orderNumber.slice(-6)}-{item.productId || idx + 1} • Unlimited Updates
+                      </p>
+                    </div>
+                    <Button
+                      onClick={() =>
+                        downloadDigitalAsset({
+                          productName: item.productName,
+                          orderNumber: order.orderNumber,
+                          productId: item.productId || idx + 1,
+                          fileUrl: item.fileUrl,
+                        })
+                      }
+                      className="btn-neon"
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "0.4rem",
+                        padding: "0.4rem 0.85rem",
+                        fontSize: "0.85rem",
+                      }}
+                    >
+                      <Download size={15} />
+                      Download Asset
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Actions */}
           <div
             style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}
@@ -372,8 +461,8 @@ export default function OrderConfirmation() {
                 gap: "0.5rem",
               }}
             >
-              <Download size={18} />
-              Download Invoice
+              <Printer size={18} />
+              Print / Save PDF Invoice
             </Button>
             <Button
               onClick={() => navigate("/profile")}

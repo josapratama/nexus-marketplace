@@ -510,6 +510,16 @@ export default function Cart() {
                   <ArrowRight size={18} />
                 </Button>
 
+                <p
+                  style={{
+                    fontSize: "0.75rem",
+                    color: "rgba(0, 245, 255, 0.5)",
+                    textAlign: "center",
+                  }}
+                >
+                  🎟️ Apply promo codes (e.g. NEXUS10, CYBER20) at checkout
+                </p>
+
                 <Button
                   onClick={() => navigate("/catalog")}
                   className="btn-neon-secondary"

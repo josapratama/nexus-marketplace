@@ -3,7 +3,7 @@ import { useLocation } from "wouter";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ArrowRight, Lock } from "lucide-react";
+import { ArrowRight, Lock, Tag, Check } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { startLogin } from "@/const";
@@ -11,11 +11,11 @@ import { toast } from "sonner";
 
 export default function Checkout() {
   const [, navigate] = useLocation();
-  const { isAuthenticated } = useAuth();
+  const { user, isAuthenticated } = useAuth();
   const [step, setStep] = useState<"shipping" | "payment">("shipping");
   const [formData, setFormData] = useState({
-    email: "",
-    fullName: "",
+    email: user?.email || "",
+    fullName: user?.name || "",
     address: "",
     city: "",
     zipCode: "",
@@ -24,6 +24,13 @@ export default function Checkout() {
     cvv: "",
   });
 
+  const [couponCode, setCouponCode] = useState("");
+  const [appliedCoupon, setAppliedCoupon] = useState<{
+    code: string;
+    discountAmount: number;
+    label: string;
+  } | null>(null);
+
   const utils = trpc.useUtils();
 
   const { data: cartItems = [], isLoading: cartLoading } =
@@ -31,10 +38,25 @@ export default function Checkout() {
       enabled: isAuthenticated,
     });
 
+  const validateCouponMutation = trpc.cart.validateCoupon.useMutation({
+    onSuccess: res => {
+      setAppliedCoupon({
+        code: res.code,
+        discountAmount: res.discountAmount,
+        label: res.label,
+      });
+      toast.success(`Coupon applied: ${res.label} (-$${res.discountAmount})`);
+    },
+    onError: err => {
+      toast.error(err.message || "Invalid coupon code");
+    },
+  });
+
   const createOrderMutation = trpc.orders.createOrder.useMutation({
     onSuccess: order => {
       utils.cart.getItems.invalidate();
       utils.cart.getCount.invalidate();
+      toast.success("Order confirmed successfully!");
       navigate(`/order-confirmation/${order.orderNumber}`);
     },
     onError: err => {
@@ -46,8 +68,19 @@ export default function Checkout() {
     (sum, item) => sum + parseFloat(item.productPrice) * item.quantity,
     0
   );
-  const tax = subtotal * 0.1;
-  const total = subtotal + tax;
+  const discount = appliedCoupon ? appliedCoupon.discountAmount : 0;
+  const discountedSubtotal = Math.max(0, subtotal - discount);
+  const tax = discountedSubtotal * 0.1;
+  const total = discountedSubtotal + tax;
+
+  const handleApplyCoupon = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!couponCode.trim()) return;
+    validateCouponMutation.mutate({
+      code: couponCode.trim(),
+      subtotal,
+    });
+  };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -61,7 +94,16 @@ export default function Checkout() {
 
   const handlePaymentSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    createOrderMutation.mutate();
+    createOrderMutation.mutate({
+      customerName: formData.fullName || user?.name || "Customer",
+      customerEmail: formData.email || user?.email || "",
+      shippingAddress: `${formData.address}, ${formData.city} ${formData.zipCode}`,
+      paymentMethod: formData.cardNumber
+        ? `Card (ending in ${formData.cardNumber.slice(-4) || "8888"})`
+        : "Instant Credit Card (Verified)",
+      couponCode: appliedCoupon?.code,
+      discountAmount: discount,
+    });
   };
 
   if (!isAuthenticated) {
@@ -545,6 +587,62 @@ export default function Checkout() {
                   </div>
                 ))}
               </div>
+              {/* Coupon Form */}
+              <div
+                style={{
+                  borderTop: "1px solid #2a2f4a",
+                  paddingTop: "0.75rem",
+                }}
+              >
+                <form
+                  onSubmit={handleApplyCoupon}
+                  style={{ display: "flex", gap: "0.5rem" }}
+                >
+                  <Input
+                    placeholder="Promo code (e.g. NEXUS10)"
+                    value={couponCode}
+                    onChange={e => setCouponCode(e.target.value.toUpperCase())}
+                    style={{
+                      ...inputStyle,
+                      padding: "0.5rem 0.75rem",
+                      fontSize: "0.85rem",
+                    }}
+                  />
+                  <Button
+                    type="submit"
+                    disabled={validateCouponMutation.isPending || !couponCode.trim()}
+                    className="btn-neon-secondary"
+                    style={{ whiteSpace: "nowrap", padding: "0.5rem 0.75rem" }}
+                  >
+                    Apply
+                  </Button>
+                </form>
+                {appliedCoupon && (
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "0.35rem",
+                      marginTop: "0.5rem",
+                      fontSize: "0.75rem",
+                      color: "#39ff14",
+                    }}
+                  >
+                    <Check size={14} />
+                    <span>Applied: {appliedCoupon.label}</span>
+                  </div>
+                )}
+                <p
+                  style={{
+                    fontSize: "0.7rem",
+                    color: "rgba(0, 245, 255, 0.4)",
+                    marginTop: "0.35rem",
+                  }}
+                >
+                  Promo tips: NEXUS10 (10% off), CYBER20 (20% off), SUPER50 ($50)
+                </p>
+              </div>
+
               <div
                 style={{
                   borderTop: "1px solid #2a2f4a",
@@ -565,6 +663,20 @@ export default function Checkout() {
                   <span>Subtotal</span>
                   <span>${subtotal.toFixed(2)}</span>
                 </div>
+                {appliedCoupon && (
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      color: "#39ff14",
+                      fontSize: "0.875rem",
+                      fontWeight: 600,
+                    }}
+                  >
+                    <span>Discount ({appliedCoupon.code})</span>
+                    <span>-${discount.toFixed(2)}</span>
+                  </div>
+                )}
                 <div
                   style={{
                     display: "flex",
